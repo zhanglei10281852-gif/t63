@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sanitation-postgres
+    environment:
+      POSTGRES_USER: sanitation
+      POSTGRES_PASSWORD: sanit@2024
+      POSTGRES_DB: sanitation
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sanitation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sanitation-backend
+    ports:
+      - "8653:8653"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=sanitation
+      - DB_PASSWORD=sanit@2024
+      - DB_NAME=sanitation
+      - JWT_SECRET=sanitation-jwt-secret-2024
+      - SERVER_PORT=8653
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sanitation-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8653
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
