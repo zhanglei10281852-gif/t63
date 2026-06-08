@@ -33,9 +33,8 @@
         </a-menu-item>
         <a-menu-item key="complaint">
           <span>📋</span>
-          <a-badge :count="pendingCount" :offset="[6, -2]" size="small">
-            <span>投诉工单</span>
-          </a-badge>
+          <span class="menu-text">投诉工单</span>
+          <a-badge :count="pendingCount" :offset="[10, -2]" size="small" class="menu-badge" />
         </a-menu-item>
       </a-menu>
     </a-layout-sider>
@@ -189,5 +188,17 @@ watch(() => route.path, () => {
 
 :deep(.ant-menu) {
   border-right: none;
+}
+
+:deep(.ant-menu-item) {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+:deep(.ant-menu-item-selected) {
+  color: #fff !important;
+}
+
+.menu-badge {
+  margin-left: 4px;
 }
 </style>

@@ -74,7 +74,10 @@
       </a-col>
     </a-row>
 
-    <a-modal v-model:open="recordModalVisible" title="出车记录" :width="800">
+    <a-modal v-model:open="recordModalVisible" title="出车记录" :width="800" @ok="recordModalVisible = false">
+      <template #footer>
+        <span></span>
+      </template>
       <a-table :columns="recordColumns" :data-source="vehicleRecords" :loading="recordLoading" row-key="id" size="small" :pagination="{ pageSize: 5 }">
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'depart_time'">
@@ -303,21 +306,25 @@ const showReturnModal = (vehicle) => {
 }
 
 const handleReturn = async () => {
-  if (!currentRecord.value) {
-    message.error('未找到进行中的出车记录')
-    return
-  }
   try {
-    await returnVehicle({
-      record_id: currentRecord.value.id,
+    const params: any = {
       mileage: returnForm.mileage,
       fuel_consumption: returnForm.fuel_consumption,
       road_section_ids: returnForm.road_section_ids.join(',')
-    })
+    }
+    if (currentRecord.value) {
+      params.record_id = currentRecord.value.id
+    } else if (currentVehicle.value) {
+      params.vehicle_id = currentVehicle.value.id
+    } else {
+      message.error('未找到车辆信息')
+      return
+    }
+    await returnVehicle(params)
     message.success('收车登记成功')
     returnModalVisible.value = false
     fetchVehicles()
-  } catch (e) {
+  } catch (e: any) {
     message.error(e.response?.data?.error || '收车登记失败')
   }
 }
@@ -358,4 +365,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+:global(.record-modal .ant-modal-footer) {
+  display: none;
+}
 </style>

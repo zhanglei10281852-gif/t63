@@ -66,6 +66,7 @@ func GetTodayPlans(c *gin.Context) {
 	}
 
 	GenerateDailyPlans(date)
+	CheckAndMarkMissed(date)
 
 	var plans []models.WorkPlan
 	query := database.DB.Preload("RoadSection").Preload("Worker").Where("plan_date = ?", date)
@@ -229,4 +230,34 @@ func MarkMissedTasks() {
 		Where("plan_date = ? AND status = ?", yesterday, "pending").
 		Update("status", "missed")
 	fmt.Println("Marked missed tasks for", yesterday)
+}
+
+func CheckAndMarkMissed(date string) {
+	today := time.Now().Format("2006-01-02")
+
+	if date < today {
+		database.DB.Model(&models.WorkPlan{}).
+			Where("plan_date = ? AND status = ?", date, "pending").
+			Update("status", "missed")
+		return
+	}
+
+	if date == today {
+		var pendingPlans []models.WorkPlan
+		database.DB.Where("plan_date = ? AND status = ?", date, "pending").Find(&pendingPlans)
+
+		now := time.Now()
+		for _, plan := range pendingPlans {
+			planDateTime := plan.PlanDate + " " + plan.PlanTime + ":00"
+			planTime, err := time.ParseInLocation("2006-01-02 15:04:05", planDateTime, time.Local)
+			if err != nil {
+				continue
+			}
+
+			deadline := planTime.Add(30 * time.Minute)
+			if now.After(deadline) {
+				database.DB.Model(&plan).Update("status", "missed")
+			}
+		}
+	}
 }

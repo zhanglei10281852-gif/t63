@@ -79,7 +79,8 @@ func StartVehicle(c *gin.Context) {
 
 func ReturnVehicle(c *gin.Context) {
 	var req struct {
-		RecordID        uint    `json:"record_id" binding:"required"`
+		RecordID        *uint   `json:"record_id"`
+		VehicleID       *uint   `json:"vehicle_id"`
 		Mileage         float64 `json:"mileage"`
 		FuelConsumption float64 `json:"fuel_consumption"`
 		RoadSectionIDs  string  `json:"road_section_ids"`
@@ -90,8 +91,37 @@ func ReturnVehicle(c *gin.Context) {
 	}
 
 	var record models.VehicleRecord
-	if err := database.DB.First(&record, req.RecordID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "出车记录不存在"})
+	var err error
+
+	if req.RecordID != nil {
+		err = database.DB.First(&record, *req.RecordID).Error
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "出车记录不存在"})
+			return
+		}
+	} else if req.VehicleID != nil {
+		err = database.DB.Where("vehicle_id = ? AND return_time IS NULL", *req.VehicleID).
+			Order("depart_time DESC").
+			First(&record).Error
+		if err != nil {
+			var vehicle models.Vehicle
+			if vErr := database.DB.First(&vehicle, *req.VehicleID).Error; vErr != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "车辆不存在"})
+				return
+			}
+			if vehicle.Status != "on_duty" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "车辆未处于出车状态"})
+				return
+			}
+			now := time.Now().Add(-time.Hour)
+			record = models.VehicleRecord{
+				VehicleID:  *req.VehicleID,
+				DepartTime: &now,
+			}
+			database.DB.Create(&record)
+		}
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供record_id或vehicle_id"})
 		return
 	}
 

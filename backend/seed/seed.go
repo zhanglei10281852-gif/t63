@@ -241,5 +241,33 @@ func seedVehicles() {
 	for _, v := range vehicles {
 		database.DB.Create(&v)
 	}
+
+	seedVehicleRecords()
+
 	log.Println("Vehicles seeded successfully")
+}
+
+func seedVehicleRecords() {
+	var vehicles []models.Vehicle
+	database.DB.Where("status = ?", "on_duty").Find(&vehicles)
+
+	var workers []models.Worker
+	database.DB.Limit(3).Find(&workers)
+
+	for i, v := range vehicles {
+		departTime := time.Now().Add(-time.Hour * 2)
+		var driverID *uint
+		if i < len(workers) {
+			driverID = &workers[i].ID
+		}
+
+		record := models.VehicleRecord{
+			VehicleID:   v.ID,
+			DriverID:    driverID,
+			DepartTime:  &departTime,
+		}
+		database.DB.Create(&record)
+	}
+
+	log.Println("Vehicle records seeded successfully")
 }

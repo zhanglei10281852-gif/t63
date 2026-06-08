@@ -170,8 +170,15 @@ func CalculateMonthlyAssessment(month string) {
 				Count(&validComplaints)
 		}
 		complaintDeduction := int(validComplaints) * 5
+		complaintScore := 100.0 - float64(complaintDeduction)
+		if complaintScore < 0 {
+			complaintScore = 0
+		}
 
-		totalScore := qualityScore*0.5 + completionRate*0.3 - float64(complaintDeduction)
+		totalScore := qualityScore*0.5 + completionRate*0.3 + complaintScore*0.2
+		if totalScore > 100 {
+			totalScore = 100
+		}
 		if totalScore < 0 {
 			totalScore = 0
 		}
