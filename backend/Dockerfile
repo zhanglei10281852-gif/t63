@@ -1,12 +1,18 @@
-FROM golang:1.21-alpine
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod tidy || true
+COPY go.mod go.sum ./
+RUN go mod download
 
 COPY . .
+RUN CGO_ENABLED=0 go build -o /sanitation-api .
+
+FROM alpine:3.20
+
+WORKDIR /app
+COPY --from=builder /sanitation-api /usr/local/bin/sanitation-api
 
 EXPOSE 8653
 
-CMD ["sh", "-c", "go mod tidy && go run main.go"]
+CMD ["sanitation-api"]

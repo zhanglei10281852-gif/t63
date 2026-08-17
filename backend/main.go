@@ -6,6 +6,8 @@ import (
 
 	"sanitation-backend/database"
 	"sanitation-backend/handlers"
+	vehiclerepository "sanitation-backend/internal/vehicle/repository"
+	vehicleservice "sanitation-backend/internal/vehicle/service"
 	"sanitation-backend/middleware"
 	"sanitation-backend/models"
 	"sanitation-backend/seed"
@@ -23,6 +25,9 @@ func main() {
 	log.Println("Database migrated successfully")
 
 	seed.SeedData()
+	vehicleRepository := vehiclerepository.NewGORM(database.DB)
+	vehicleService := vehicleservice.New(vehicleRepository, vehicleservice.SystemClock{})
+	vehicleHandler := handlers.NewVehicleHandler(vehicleService)
 
 	r := gin.Default()
 
@@ -70,9 +75,9 @@ func main() {
 				vehicle.GET("", handlers.GetVehicles)
 				vehicle.GET("/records", handlers.GetVehicleRecords)
 				vehicle.GET("/maintenance-reminders", handlers.GetMaintenanceReminders)
-				vehicle.POST("/start", handlers.StartVehicle)
-				vehicle.POST("/return", handlers.ReturnVehicle)
-				vehicle.PUT("/:id/status", middleware.AdminRequired(), handlers.UpdateVehicleStatus)
+				vehicle.POST("/start", vehicleHandler.StartVehicle)
+				vehicle.POST("/return", vehicleHandler.ReturnVehicle)
+				vehicle.PUT("/:id/status", middleware.AdminRequired(), vehicleHandler.UpdateVehicleStatus)
 			}
 
 			complaint := auth.Group("/complaints")

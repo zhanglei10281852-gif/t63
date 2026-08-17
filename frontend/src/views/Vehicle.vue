@@ -291,23 +291,29 @@ const handleStart = async () => {
 
 const showReturnModal = (vehicle) => {
   currentVehicle.value = vehicle
+  currentRecord.value = null
   returnForm.mileage = 0
   returnForm.fuel_consumption = 0
   returnForm.road_section_ids = []
   
-  getVehicleRecords({ vehicle_id: vehicle.id }).then(res => {
-    const ongoing = res.find(r => !r.return_time)
-    if (ongoing) {
-      currentRecord.value = ongoing
-    }
-  })
+  const requestedVehicleID = vehicle.id
+  getVehicleRecords({ vehicle_id: requestedVehicleID })
+    .then(res => {
+      if (currentVehicle.value?.id !== requestedVehicleID) return
+      currentRecord.value = res.find(r => !r.return_time) || null
+    })
+    .catch(() => {
+      if (currentVehicle.value?.id === requestedVehicleID) {
+        currentRecord.value = null
+      }
+    })
   
   returnModalVisible.value = true
 }
 
 const handleReturn = async () => {
   try {
-    const params: any = {
+    const params = {
       mileage: returnForm.mileage,
       fuel_consumption: returnForm.fuel_consumption,
       road_section_ids: returnForm.road_section_ids.join(',')
@@ -324,7 +330,7 @@ const handleReturn = async () => {
     message.success('收车登记成功')
     returnModalVisible.value = false
     fetchVehicles()
-  } catch (e: any) {
+  } catch (e) {
     message.error(e.response?.data?.error || '收车登记失败')
   }
 }
