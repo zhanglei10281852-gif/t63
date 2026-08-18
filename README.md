@@ -1,96 +1,79 @@
-# Sanitation Operations Platform
+# Sanitation Operations
 
-This repository contains a Vue frontend and a Go backend for sanitation work
-plans, inspections, vehicles, complaints, and monthly assessments.
+Sanitation Operations is a Go backend for municipal vehicle dispatch and route operations. It models route planning, shift assignment, dispatch, inspection, incidents, fuel records, maintenance, audit events, outbox processing, and daily reconciliation.
 
-## Vehicle lifecycle baseline
+The repository is a Go-first production baseline with a Vue 3 + TypeScript + Vite operator console. The frontend uses Ant Design Vue for operational controls and consumes the Go HTTP API.
 
-Vehicle dispatch follows these public invariants:
+## Structure
 
-- An available vehicle can start one active trip.
-- A vehicle cannot have more than one trip without a return time.
-- Starting a trip creates the record and changes the vehicle to `on_duty` in
-  one transaction.
-- Returning a trip closes the record, adds its mileage, and changes the
-  vehicle to `available` in one transaction.
-- Repeated or conflicting state transitions return HTTP `409`.
-- Canceled requests do not commit state changes.
+- `cmd/server`: HTTP server, dependency wiring, worker lifecycle, and graceful shutdown.
+- `internal/domain`: domain models and state transitions.
+- `internal/service`: dispatch, planning, crew, fleet, inspection, fuel, maintenance, batch, query, and reconciliation workflows.
+- `internal/repository`: storage contracts and transaction boundary.
+- `internal/storage/sqlite`: SQLite implementation, migrations, optimistic version checks, and isolated reads.
+- `internal/httpapi` and `internal/middleware`: JSON API, request IDs, timeout, CORS, rate limiting, logging, and panic recovery.
+- `internal/worker`: outbox claiming, retry/backoff, permanent failure, and cancellation.
+- `frontend`: Vue 3/TypeScript operator console backed by Ant Design Vue.
+- `migrations`: readable schema baseline; the server embeds the same schema for startup migration.
 
-The backend separates this behavior into:
+## Data model
 
-- `internal/vehicle/domain`: commands, records, states, and error categories.
-- `internal/vehicle/service`: validation, clock injection, and orchestration.
-- `internal/vehicle/repository`: PostgreSQL/GORM transactions and an in-memory
-  repository for deterministic tests.
-- `handlers`: the existing Gin API contract and stable HTTP error mapping.
+The SQLite schema contains `vehicles`, `drivers`, `driver_certifications`, `routes`, `shifts`, `trips`, `inspections`, `inspection_items`, `maintenance_orders`, `incidents`, `fuel_logs`, `audit_events`, `idempotency_keys`, and `outbox_jobs`, plus `schema_migrations`. Foreign keys, uniqueness constraints, indexes, timestamps, and optimistic `version` columns are enforced by the database.
 
-The existing endpoints remain available:
+## Run locally
+
+Requires Go 1.22 or newer and Node.js 20+ for the console.
 
 ```text
-POST /api/vehicles/start
-POST /api/vehicles/return
-```
-
-## Requirements
-
-- Go 1.21 or newer
-- Node.js 20 or newer
-- Docker with Compose for the full PostgreSQL-backed application
-
-## Backend verification
-
-Run from `backend`:
-
-```bash
-go test ./... -count=1
-go test -race ./handlers -run TestConcurrentVehicleStartAllowsOneActiveTrip -count=1
-go build ./...
-go vet ./...
-```
-
-The tests use the real Gin handlers and vehicle service with a deterministic
-in-memory repository. They do not require PostgreSQL or network access.
-
-The production repository has an opt-in PostgreSQL integration suite. It
-creates and removes a uniquely named schema, leaving existing application
-tables and data unchanged.
-
-```bash
-docker compose up -d postgres
-cd backend
-VEHICLE_TEST_DATABASE_URL='host=localhost port=5432 user=sanitation password=sanit@2024 dbname=sanitation sslmode=disable' \
-  go test -race -tags=integration ./internal/vehicle/repository -count=1
-```
-
-PowerShell equivalent:
-
-```powershell
-docker compose up -d postgres
-Set-Location backend
-$env:VEHICLE_TEST_DATABASE_URL='host=localhost port=5432 user=sanitation password=sanit@2024 dbname=sanitation sslmode=disable'
-go test -race -tags=integration ./internal/vehicle/repository -count=1
-```
-
-Startup also checks for legacy vehicles with more than one active trip before
-creating the uniqueness constraint. If any are found, migration stops and
-reports the affected vehicle IDs; it never deletes or rewrites those records.
-
-## Frontend verification
-
-Run from `frontend`:
-
-```bash
+go run ./cmd/server
+cd frontend
 npm ci
+npm run dev
+```
+
+The API listens on `http://localhost:8653`; the console listens on `http://localhost:5173`. Configuration is injected with the variables in `.env.example`.
+
+## Docker
+
+```text
+docker compose up --build -d
+docker compose logs -f backend
+```
+
+The backend stores SQLite data in the `sanitation-data` volume. The frontend proxies `/api` to the backend service. Stop the stack with `docker compose down`.
+
+## Main API
+
+```text
+GET  /health/live
+GET  /health/ready
+GET  /api/v1/vehicles?limit=20&status=available
+GET  /api/v1/drivers
+POST /api/v1/routes
+POST /api/v1/shifts
+POST /api/v1/shifts/assign
+POST /api/v1/trips/start
+POST /api/v1/trips/{id}/return
+POST /api/v1/inspections
+POST /api/v1/inspections/{id}/submit
+GET  /api/v1/reconciliation?service_date=2026-08-18
+```
+
+Mutating requests accept `X-Operator-ID`; starting a trip requires an `Idempotency-Key` header or JSON field. Errors use `{code, message, request_id}` and standard HTTP status codes.
+
+## Verification
+
+```text
+go test ./... -count=1
+go test -race ./... -count=1
+go vet ./...
+go build ./...
+go run E:/gomark/.agents/skills/go-base-project-create/scripts/measure_project.go -root . -enforce
+cd frontend
+npm ci
+npm test -- --run
+npm run typecheck
 npm run build
 ```
 
-## Run the full application
-
-From the repository root:
-
-```bash
-docker compose up --build
-```
-
-The frontend listens on `http://localhost:5173`; the backend listens on
-`http://localhost:8653`.
+The test suite covers domain state machines, service workflows, real SQLite persistence, transaction rollback, HTTP contracts, worker retries, context cancellation, concurrency, and reopen/recovery behavior.

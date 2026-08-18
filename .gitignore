@@ -13,6 +13,9 @@ out/
 target/
 *.o
 *.exe
+*.db
+*.db-shm
+*.db-wal
 
 # IDE
 .idea/
@@ -43,6 +46,8 @@ yarn-debug.log*
 
 # Coverage & test
 coverage/
+test-results/
+playwright-report/
 .nyc_output/
 htmlcov/
 
